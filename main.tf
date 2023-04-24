@@ -1,5 +1,9 @@
 data "aviatrix_account" "this" {
-  account_name = var.avx_gcp_account_name
+  account_name = var.account
+}
+
+data "aviatrix_transit_gateway" "this" {
+  gw_name = var.transit_gateway_name
 }
 
 data "google_compute_network" "ncc" {

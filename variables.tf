@@ -1,4 +1,4 @@
-variable "avx_gcp_account_name" {
+variable "account" {
   description = "GCP account as it appears in the controller."
   type        = string
 }
@@ -14,28 +14,15 @@ variable "ncc_hub_name" {
   type        = string
 }
 
-variable "transit_gateway" {
+variable "transit_gateway_name" {
   description = "Transit Gateway resource."
-  type = object(
-    {
-      vpc_id             = string,
-      gw_name            = string,
-      private_ip         = string,
-      bgp_lan_interfaces = list(any)
-      bgp_lan_ip_list    = list(string),
-      vpc_reg            = string,
-      ha_gw_name         = string,
-      ha_private_ip      = string,
-      ha_bgp_lan_ip_list = list(string),
-      ha_zone            = string,
-      local_as_number    = optional(string)
-    }
-  )
+  type        = string
 }
 
 variable "bgp_interface_index" {
   description = "Number of the BGP LAN/LANHA interface."
   type        = number
+  default     = 0
 }
 
 variable "transit_asn" {
@@ -58,22 +45,19 @@ variable "network_domain" {
 locals {
   ncc_hub_id = "projects/${data.aviatrix_account.this.gcloud_project_id}/locations/global/hubs/${var.ncc_hub_name}"
 
-  #transit_pri_self_link = "${data.aviatrix_account.this.gcloud_project_id}/zones/${local.transit_pri_zone}/instances/${local.transit_pri_name}"
-  #transit_ha_self_link  = "${data.aviatrix_account.this.gcloud_project_id}/zones/${local.transit_ha_zone}/instances/${local.transit_ha_name}"
-
-  transit_vpc_id     = var.transit_gateway.vpc_id
-  transit_pri_name   = var.transit_gateway.gw_name
-  transit_pri_ip     = var.transit_gateway.private_ip
-  transit_pri_bgp_ip = var.transit_gateway.bgp_lan_ip_list[var.bgp_interface_index]
-  transit_pri_zone   = var.transit_gateway.vpc_reg
-  transit_ha_name    = var.transit_gateway.ha_gw_name
-  transit_ha_ip      = var.transit_gateway.ha_private_ip
-  transit_ha_bgp_ip  = var.transit_gateway.ha_bgp_lan_ip_list[var.bgp_interface_index]
-  transit_ha_zone    = var.transit_gateway.ha_zone
-  transit_asn        = coalesce(var.transit_gateway.local_as_number, var.transit_asn)
+  transit_vpc_id     = data.aviatrix_transit_gateway.this.vpc_id
+  transit_pri_name   = data.aviatrix_transit_gateway.this.gw_name
+  transit_pri_ip     = data.aviatrix_transit_gateway.this.private_ip
+  transit_pri_bgp_ip = data.aviatrix_transit_gateway.this.bgp_lan_ip_list[var.bgp_interface_index]
+  transit_pri_zone   = data.aviatrix_transit_gateway.this.vpc_reg
+  transit_ha_name    = data.aviatrix_transit_gateway.this.ha_gw_name
+  transit_ha_ip      = data.aviatrix_transit_gateway.this.ha_private_ip
+  transit_ha_bgp_ip  = data.aviatrix_transit_gateway.this.ha_bgp_lan_ip_list[var.bgp_interface_index]
+  transit_ha_zone    = data.aviatrix_transit_gateway.this.ha_zone
+  transit_asn        = coalesce(data.aviatrix_transit_gateway.this.local_as_number, var.transit_asn)
 
   region              = regex("[a-z]+-[a-z0-9]+", local.transit_pri_zone)
-  ncc_vpc_name        = var.transit_gateway.bgp_lan_interfaces[var.bgp_interface_index].vpc_id
-  bgp_subnet_cidr     = var.transit_gateway.bgp_lan_interfaces[var.bgp_interface_index].subnet
+  ncc_vpc_name        = data.aviatrix_transit_gateway.this.bgp_lan_interfaces[var.bgp_interface_index].vpc_id
+  bgp_subnet_cidr     = data.aviatrix_transit_gateway.this.bgp_lan_interfaces[var.bgp_interface_index].subnet
   bgp_subnet_selflink = one([for k, v in data.google_compute_subnetwork.ncc : k if v.ip_cidr_range == local.bgp_subnet_cidr])
 }
