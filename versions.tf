@@ -3,6 +3,8 @@ terraform {
     aviatrix = {
       source = "aviatrixsystems/aviatrix"
     }
+    google = {
+      source = "hashicorp/google"
+    }
   }
-  required_version = ">= 0.13"
 }
