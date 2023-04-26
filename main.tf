@@ -1,21 +1,3 @@
-data "aviatrix_account" "this" {
-  account_name = var.account
-}
-
-data "aviatrix_transit_gateway" "this" {
-  gw_name = var.transit_gateway_name
-}
-
-data "google_compute_network" "ncc" {
-  project = data.aviatrix_account.this.gcloud_project_id
-  name    = local.ncc_vpc_name
-}
-
-data "google_compute_subnetwork" "ncc" {
-  for_each  = toset(data.google_compute_network.ncc.subnetworks_self_links)
-  self_link = each.value
-}
-
 resource "google_network_connectivity_hub" "this" {
   count = var.create_ncc_hub ? 1 : 0
 
@@ -26,9 +8,9 @@ resource "google_network_connectivity_hub" "this" {
 
 resource "google_compute_router" "this" {
   project = data.aviatrix_account.this.gcloud_project_id
-  region  = local.region
-  name    = "${local.ncc_vpc_name}-cr"
-  network = local.ncc_vpc_name
+  region  = data.google_compute_subnetwork.bgp.region
+  name    = "${var.transit_gateway.gw_name}-cr"
+  network = data.google_compute_subnetwork.bgp.network
   bgp {
     asn = var.cr_asn
   }
@@ -36,96 +18,85 @@ resource "google_compute_router" "this" {
 
 resource "google_compute_address" "this" {
   project  = data.aviatrix_account.this.gcloud_project_id
-  for_each = toset(["pri", "ha"])
+  for_each = toset(local.cr_peers)
 
-  name         = "${local.ncc_vpc_name}-cr-address-${each.value}"
-  region       = local.region
-  subnetwork   = local.bgp_subnet_selflink
+  name         = "${google_compute_router.this.name}-address-${each.value}"
+  region       = data.google_compute_subnetwork.bgp.region
+  subnetwork   = data.google_compute_subnetwork.bgp.self_link
   address_type = "INTERNAL"
 }
 
-
 resource "google_compute_router_interface" "pri" {
-  project             = data.aviatrix_account.this.gcloud_project_id
-  name                = "${local.ncc_vpc_name}-cr-int-pri"
+  project = data.aviatrix_account.this.gcloud_project_id
+
+  name                = "${google_compute_router.this.name}-int-pri"
   router              = google_compute_router.this.name
-  region              = local.region
-  subnetwork          = local.bgp_subnet_selflink
+  region              = data.google_compute_subnetwork.bgp.region
+  subnetwork          = data.google_compute_subnetwork.bgp.self_link
   private_ip_address  = google_compute_address.this["pri"].address
   redundant_interface = google_compute_router_interface.ha.name
 }
 
-
 resource "google_compute_router_interface" "ha" {
-  project            = data.aviatrix_account.this.gcloud_project_id
-  name               = "${local.ncc_vpc_name}-cr-int-ha"
+  project = data.aviatrix_account.this.gcloud_project_id
+
+  name               = "${google_compute_router.this.name}-int-ha"
   router             = google_compute_router.this.name
-  region             = local.region
-  subnetwork         = local.bgp_subnet_selflink
+  region             = data.google_compute_subnetwork.bgp.region
+  subnetwork         = data.google_compute_subnetwork.bgp.self_link
   private_ip_address = google_compute_address.this["ha"].address
 }
 
 resource "google_network_connectivity_spoke" "avx" {
   project  = data.aviatrix_account.this.gcloud_project_id
-  name     = "${local.ncc_vpc_name}-ncc-avx"
-  location = local.region
+  name     = "${google_compute_router.this.name}-to-avx"
+  location = data.google_compute_subnetwork.bgp.region
   hub      = try(one(google_network_connectivity_hub.this).id, local.ncc_hub_id)
   linked_router_appliance_instances {
-    instances {
-      virtual_machine = local.transit_pri_name
-      ip_address      = local.transit_pri_bgp_ip
-    }
-    instances {
-      virtual_machine = local.transit_ha_name
-      ip_address      = local.transit_ha_bgp_ip
+    dynamic "instances" {
+      for_each = local.avx_peers
+      content {
+        virtual_machine = local.avx_peers[instances.key]["uri"]
+        ip_address      = instances.value["ip"]
+      }
     }
     site_to_site_data_transfer = true
   }
 }
 
-resource "google_compute_router_peer" "pri" {
-  project  = data.aviatrix_account.this.gcloud_project_id
-  for_each = { "pri" = 0, "ha" = 1 }
+resource "google_compute_router_peer" "this" {
+  for_each = local.cr_peer_map
 
-  name                      = "${local.ncc_vpc_name}-ncc-avx-crpri-to-${each.key}-gw"
+  project                   = data.aviatrix_account.this.gcloud_project_id
+  name                      = "${google_compute_router.this.name}-avx-peer-${each.key}"
   router                    = google_compute_router.this.name
-  region                    = local.region
-  peer_ip_address           = [local.transit_pri_bgp_ip, local.transit_ha_bgp_ip][each.value]
-  peer_asn                  = local.transit_asn
+  region                    = data.google_compute_subnetwork.bgp.region
+  peer_ip_address           = local.avx_peers[each.value["avx"]]["ip"]
+  peer_asn                  = aviatrix_transit_external_device_conn.avx_to_cr.bgp_local_as_num
   advertised_route_priority = 100
-  interface                 = google_compute_router_interface.pri.name
-  router_appliance_instance = [google_network_connectivity_spoke.avx.linked_router_appliance_instances[0].instances[0].virtual_machine, google_network_connectivity_spoke.avx.linked_router_appliance_instances[0].instances[1].virtual_machine][each.value]
-}
+  interface                 = each.value["cr"] == "pri" ? google_compute_router_interface.pri.name : google_compute_router_interface.ha.name
+  router_appliance_instance = local.avx_peers[each.value["avx"]]["uri"]
 
-resource "google_compute_router_peer" "ha" {
-  project  = data.aviatrix_account.this.gcloud_project_id
-  for_each = { "pri" = 0, "ha" = 1 }
-
-  name                      = "${local.ncc_vpc_name}-ncc-avx-crha-to-${each.key}-gw"
-  router                    = google_compute_router.this.name
-  region                    = local.region
-  peer_ip_address           = [local.transit_pri_bgp_ip, local.transit_ha_bgp_ip][each.value]
-  peer_asn                  = local.transit_asn
-  advertised_route_priority = 100
-  interface                 = google_compute_router_interface.ha.name
-  router_appliance_instance = [google_network_connectivity_spoke.avx.linked_router_appliance_instances[0].instances[0].virtual_machine, google_network_connectivity_spoke.avx.linked_router_appliance_instances[0].instances[1].virtual_machine][each.value]
+  depends_on = [
+    google_network_connectivity_spoke.avx
+  ]
 }
 
 resource "aviatrix_transit_external_device_conn" "avx_to_cr" {
-  vpc_id                    = local.transit_vpc_id
-  connection_name           = "${local.ncc_vpc_name}-avx-to-ncc"
-  gw_name                   = local.transit_pri_name
+  vpc_id                    = var.transit_gateway.vpc_id
+  connection_name           = "${google_compute_router.this.name}-ncc-to-avx"
+  gw_name                   = var.transit_gateway.gw_name
   connection_type           = "bgp"
   tunnel_protocol           = "LAN"
-  bgp_local_as_num          = local.transit_asn
+  bgp_local_as_num          = coalesce(var.transit_gateway.local_as_number, var.transit_asn)
   bgp_remote_as_num         = var.cr_asn
   remote_lan_ip             = google_compute_address.this["pri"].address
-  local_lan_ip              = local.transit_pri_bgp_ip
-  ha_enabled                = true
-  backup_bgp_remote_as_num  = var.cr_asn
-  backup_remote_lan_ip      = google_compute_address.this["ha"].address
-  backup_local_lan_ip       = local.transit_ha_bgp_ip
-  enable_bgp_lan_activemesh = true
+  local_lan_ip              = local.avx_peers["pri"]["ip"]
+  ha_enabled                = local.transit_gateway_ha
+  backup_bgp_remote_as_num  = local.transit_gateway_ha ? var.cr_asn : null
+  backup_remote_lan_ip      = local.transit_gateway_ha ? google_compute_address.this["ha"].address : null
+  backup_local_lan_ip       = local.transit_gateway_ha ? local.avx_peers["ha"]["ip"] : null
+  enable_bgp_lan_activemesh = local.transit_gateway_ha
 }
 
 resource "aviatrix_segmentation_network_domain_association" "this" {

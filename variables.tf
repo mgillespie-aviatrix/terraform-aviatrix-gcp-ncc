@@ -14,10 +14,35 @@ variable "ncc_hub_name" {
   type        = string
 }
 
-variable "transit_gateway_name" {
+# variable "transit_gateway_name" {
+#   description = "Transit Gateway resource."
+#   type        = string
+# }
+
+variable "transit_gateway" {
   description = "Transit Gateway resource."
-  type        = string
+  type = object(
+    {
+      vpc_id             = string,
+      gw_name            = string,
+      private_ip         = string,
+      bgp_lan_interfaces = list(any)
+      bgp_lan_ip_list    = list(string),
+      vpc_reg            = string,
+      ha_gw_name         = string,
+      ha_private_ip      = string,
+      ha_bgp_lan_ip_list = list(string),
+      ha_zone            = string,
+      local_as_number    = optional(string)
+    }
+  )
 }
+
+# variable "transit_gateway_ha" {
+#   description = "Transit Gateway in HA."
+#   type        = bool
+#   default     = true
+# }
 
 variable "bgp_interface_index" {
   description = "Number of the BGP LAN/LANHA interface."
@@ -43,21 +68,39 @@ variable "network_domain" {
 }
 
 locals {
-  ncc_hub_id = "projects/${data.aviatrix_account.this.gcloud_project_id}/locations/global/hubs/${var.ncc_hub_name}"
+  ncc_hub_id         = "projects/${data.aviatrix_account.this.gcloud_project_id}/locations/global/hubs/${var.ncc_hub_name}"
+  transit_gateway_ha = coalesce(var.transit_gateway.ha_zone, "none") == "none" ? false : true
 
-  transit_vpc_id     = data.aviatrix_transit_gateway.this.vpc_id
-  transit_pri_name   = data.aviatrix_transit_gateway.this.gw_name
-  transit_pri_ip     = data.aviatrix_transit_gateway.this.private_ip
-  transit_pri_bgp_ip = data.aviatrix_transit_gateway.this.bgp_lan_ip_list[var.bgp_interface_index]
-  transit_pri_zone   = data.aviatrix_transit_gateway.this.vpc_reg
-  transit_ha_name    = data.aviatrix_transit_gateway.this.ha_gw_name
-  transit_ha_ip      = data.aviatrix_transit_gateway.this.ha_private_ip
-  transit_ha_bgp_ip  = data.aviatrix_transit_gateway.this.ha_bgp_lan_ip_list[var.bgp_interface_index]
-  transit_ha_zone    = data.aviatrix_transit_gateway.this.ha_zone
-  transit_asn        = coalesce(data.aviatrix_transit_gateway.this.local_as_number, var.transit_asn)
+  #URI is built here because the Google Terraform provider throws an inconsistent plan error if I use the self_link from the google_compute_instance data for the gateways.
+  avx_peer_pri = {
+    pri = {
+      i    = 0,
+      name = var.transit_gateway.gw_name,
+      ip   = var.transit_gateway.bgp_lan_ip_list[var.bgp_interface_index]
+      zone = var.transit_gateway.vpc_reg
+      uri  = "projects/${data.aviatrix_account.this.gcloud_project_id}/zones/${var.transit_gateway.vpc_reg}/instances/${var.transit_gateway.gw_name}"
+    }
+  }
+  avx_peer_ha = local.transit_gateway_ha ? {
+    ha = {
+      i    = 1,
+      name = var.transit_gateway.ha_gw_name
+      ip   = var.transit_gateway.ha_bgp_lan_ip_list[var.bgp_interface_index],
+      zone = var.transit_gateway.ha_zone
+      uri  = "projects/${data.aviatrix_account.this.gcloud_project_id}/zones/${var.transit_gateway.ha_zone}/instances/${var.transit_gateway.ha_gw_name}"
+    }
+  } : {}
 
-  region              = regex("[a-z]+-[a-z0-9]+", local.transit_pri_zone)
-  ncc_vpc_name        = data.aviatrix_transit_gateway.this.bgp_lan_interfaces[var.bgp_interface_index].vpc_id
-  bgp_subnet_cidr     = data.aviatrix_transit_gateway.this.bgp_lan_interfaces[var.bgp_interface_index].subnet
-  bgp_subnet_selflink = one([for k, v in data.google_compute_subnetwork.ncc : k if v.ip_cidr_range == local.bgp_subnet_cidr])
+  avx_peers = merge(local.avx_peer_pri, local.avx_peer_ha)
+
+  cr_peers = ["pri", "ha"]
+  cr_peer_map = merge([for k in local.cr_peers :
+    {
+      for k2 in keys(local.avx_peers) : "cr-${k}-to-avx-${k2}" =>
+      {
+        cr  = k,
+        avx = k2
+      }
+    }
+  ]...)
 }

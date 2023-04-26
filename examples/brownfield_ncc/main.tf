@@ -1,3 +1,8 @@
+data "aviatrix_transit_gateway" "my_gcp_transit" {
+  gw_name = "my_gcp_transit"
+}
+
+
 module "avx_ncc" {
   source = "terraform-aviatrix-modules/gcp-ncc/aviatrix"
 

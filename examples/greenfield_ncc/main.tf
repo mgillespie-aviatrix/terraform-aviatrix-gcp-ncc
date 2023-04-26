@@ -22,7 +22,7 @@ module "avx_ncc" {
   source = "terraform-aviatrix-modules/gcp-ncc/aviatrix"
 
   account         = "GCP"
-  ncc_hub_name    = "avx-mgmt"
-  transit_gateway = module.my_gcp_transit.transit_gateway.gw_name
+  ncc_hub_name    = "test-hub"
+  transit_gateway = module.my_gcp_transit.transit_gateway
   cr_asn          = 64701
 }
