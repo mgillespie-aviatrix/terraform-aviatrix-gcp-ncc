@@ -14,11 +14,6 @@ variable "ncc_hub_name" {
   type        = string
 }
 
-# variable "transit_gateway_name" {
-#   description = "Transit Gateway resource."
-#   type        = string
-# }
-
 variable "transit_gateway" {
   description = "Transit Gateway resource."
   type = object(
@@ -37,12 +32,6 @@ variable "transit_gateway" {
     }
   )
 }
-
-# variable "transit_gateway_ha" {
-#   description = "Transit Gateway in HA."
-#   type        = bool
-#   default     = true
-# }
 
 variable "bgp_interface_index" {
   description = "Number of the BGP LAN/LANHA interface."

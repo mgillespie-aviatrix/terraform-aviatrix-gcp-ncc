@@ -23,8 +23,7 @@ key | value
 :--- | :---
 [account](https://registry.terraform.io/providers/AviatrixSystems/aviatrix/latest/docs/resources/aviatrix_vpc#account_name) | The account name as known by the Aviatrix controller.
 [ncc_hub_name](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/network_connectivity_hub#name) | The name of the NCC hub for the BGP over LAN VPC. A new hub is created by default.
-[transit_gateway_name](https://registry.terraform.io/providers/AviatrixSystems/aviatrix/latest/docs/resources/aviatrix_transit_gateway#gw_name) | The name of the Transit Gateway to connect to.
-
+[transit_gateway](https://registry.terraform.io/providers/AviatrixSystems/aviatrix/latest/docs/resources/aviatrix_transit_gateway) | The Transit Gateway object, either from the resource/module or from data.
 [cr_asn](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_router#asn) | ASN to use for the Cloud Router.
 
 The following variables are optional:
@@ -43,5 +42,4 @@ This module will return the following outputs:
 key | description
 :---|:---
 external_device_conn | The Aviatrix Transit external device connection object.
-gcp_peer_pri | The GCP Cloud Router Peer for the primary CR ip.
-gcp_peer_ha | The GCP Cloud Router Peer for the ha CR ip.
+gcp_peer | The GCP Cloud Router BGP peers.
