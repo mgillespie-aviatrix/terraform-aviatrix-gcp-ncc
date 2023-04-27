@@ -11,7 +11,7 @@ Connects Google Cloud's Network Connectivity Center to an Aviatrix Transit Gatew
 ### Compatibility
 Module version | Terraform version | Controller version | Terraform provider version
 :--- | :--- | :--- | :---
-v1.0.0 | 1.40 | 7.0 | 3.00
+v1.0.0 | 1.4.0 | 7.0 | 3.00
 
 ### Usage Example
 See [examples](https://github.com/terraform-aviatrix-modules/terraform-aviatrix-gcp-ncc/tree/main/examples)
