@@ -58,7 +58,7 @@ variable "network_domain" {
 
 locals {
   ncc_hub_id         = "projects/${data.aviatrix_account.this.gcloud_project_id}/locations/global/hubs/${var.ncc_hub_name}"
-  transit_gateway_ha = coalesce(var.transit_gateway.ha_zone, "none") == "none" ? false : true
+  transit_gateway_ha = coalesce(var.transit_gateway.ha_zone, "none") == "none" ? false : true # The ha_zone isn't computed, so a good way to see if the Gateway is an HA deployment.
 
   #URI is built here because the Google Terraform provider throws an inconsistent plan error if I use the self_link from the google_compute_instance data for the gateways.
   avx_peer_pri = {
@@ -82,8 +82,8 @@ locals {
 
   avx_peers = merge(local.avx_peer_pri, local.avx_peer_ha)
 
-  cr_peers = ["pri", "ha"]
-  cr_peer_map = merge([for k in local.cr_peers :
+  cr_peers = ["pri", "ha"]                       # Cloud Router requires Primary and HA interfaces.
+  cr_peer_map = merge([for k in local.cr_peers : # Create map so peers are created in a single resource.
     {
       for k2 in keys(local.avx_peers) : "cr-${k}-to-avx-${k2}" =>
       {

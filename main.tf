@@ -47,6 +47,9 @@ resource "google_compute_router_interface" "ha" {
   private_ip_address = google_compute_address.this["ha"].address
 }
 
+# As of April 2023, this resource is slightly broken.
+# The virtual_machine attribute requires a URI or self_link but is picky about the origin of the value.
+# A self_link derived from data.google_compute_instance will result in an inconsistent plan message.
 resource "google_network_connectivity_spoke" "avx" {
   project  = data.aviatrix_account.this.gcloud_project_id
   name     = "${google_compute_router.this.name}-to-avx"
