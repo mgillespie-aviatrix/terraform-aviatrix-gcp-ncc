@@ -31,7 +31,6 @@ The following variables are optional:
 key | default | value 
 :---|:---|:---
 create_ncc_hub | true | Set to false to use an existing NCC Hub.
-transit_gateway_ha | true | Set to false if a single Transit Gateway is deployed.
 [bgp_interface_index](https://registry.terraform.io/providers/AviatrixSystems/aviatrix/latest/docs/resources/aviatrix_transit_gateway#bgp_lan_interfaces) | 0 | Index number of the BGP over LAN interface.
 [transit_asn](hhttps://registry.terraform.io/providers/AviatrixSystems/aviatrix/latest/docs/resources/aviatrix_transit_gateway#local_as_number) | null | If ASN is specified on the Transit Gateway, this value is not used.
 [network_domain](https://registry.terraform.io/providers/AviatrixSystems/aviatrix/latest/docs/resources/aviatrix_segmentation_network_domain_association#network_domain_name) | null | If Aviatrix Network Domains/segmentation are required, specify this value.
